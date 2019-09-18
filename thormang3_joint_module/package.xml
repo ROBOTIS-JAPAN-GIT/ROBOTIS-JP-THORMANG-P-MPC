@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>thormang3_joint_module</name>
+  <version>0.0.1</version>
+  <description>
+    This package provides follow joint trajectory action interface for moveit.
+  </description>
+  <license>Apache 2.0</license>
+  <author email="yoshimaru@robotis.com">Yoshimaru</author>
+  <maintainer email="yoshimaru@robotis.com">Yoshimaru</maintainer>
+  <url type="repository">https://github.com/ROBOTIS-JAPAN-GIT/ROBOTIS-JP-THORMANG-P-MPC</url>
+  <url type="bugtracker">https://github.com/ROBOTIS-JAPAN-GIT/ROBOTIS-JP-THORMANG-P-MPC/issues</url>
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>roscpp</depend>
+  <depend>roslib</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>robotis_controller_msgs</depend>
+  <depend>thormang3_manipulation_module_msgs</depend> <!-- unnecessary -->
+  <depend>cmake_modules</depend>
+  <depend>robotis_framework_common</depend>
+  <depend>robotis_math</depend>
+  <depend>thormang3_kinematics_dynamics</depend> <!-- unnecessary -->
+  <depend>actionlib</depend> <!-- unnecessary -->
+  <depend>control_msgs</depend>
+  <depend>boost</depend>
+  <depend>eigen</depend>
+  <depend>yaml-cpp</depend>
+</package>

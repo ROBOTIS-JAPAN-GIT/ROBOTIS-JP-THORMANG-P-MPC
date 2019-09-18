@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>jp_thormang3_p_mpc</name>
+  <version>0.0.1</version>
+  <description>
+    ROS packages for the jp_thormang3_p_mpc (meta package)
+  </description>
+  <license>Apache 2.0</license>
+  <author email="yoshimaru@robotis.com">Yoshimaru</author>
+  <maintainer email="yoshimaru@robotis.com">Yoshimaru</maintainer>
+
+  <url type="repository">https://github.com/ROBOTIS-JAPAN-GIT/ROBOTIS-JP-THORMANG-P-MPC</url>
+  <url type="bugtracker">https://github.com/ROBOTIS-JAPAN-GIT/ROBOTIS-JP-THORMANG-P-MPC/issues</url>
+  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>ati_ft_sensor</exec_depend>
+  <exec_depend>motion_module_tutorial</exec_depend>
+  <exec_depend>sensor_module_tutorial</exec_depend>
+  <exec_depend>thormang3_action_module</exec_depend>
+  <exec_depend>thormang3_balance_control</exec_depend>
+  <exec_depend>thormang3_base_module</exec_depend>
+  <exec_depend>thormang3_feet_ft_module</exec_depend>
+  <exec_depend>thormang3_gripper_module</exec_depend>
+  <exec_depend>thormang3_head_control_module</exec_depend>
+  <exec_depend>thormang3_kinematics_dynamics</exec_depend>
+  <exec_depend>jp_thormang3_p_manager</exec_depend>
+  <exec_depend>thormang3_manipulation_module</exec_depend>
+  <exec_depend>thormang3_walking_module</exec_depend>
+  <export><metapackage/></export>
+</package>
