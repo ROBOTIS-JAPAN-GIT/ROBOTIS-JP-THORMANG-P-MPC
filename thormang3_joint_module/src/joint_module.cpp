@@ -107,7 +107,7 @@ void JointModule::queueThread()
   ros_node.setCallbackQueue(&callback_queue);
 
   /* action server */
-  follow_joint_trajectory_action_server_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(ros_node, "thormang3/follow_joint_trajectory_action", false));
+  follow_joint_trajectory_action_server_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(ros_node, "thormang3/right_arm_controller/follow_joint_trajectory", false));
   follow_joint_trajectory_action_server_->registerGoalCallback(boost::bind(&JointModule::followJointTrajectoryActionGoalCallback, this));
   follow_joint_trajectory_action_server_->registerPreemptCallback(boost::bind(&JointModule::followJointTrajectoryActionPreemptCallback, this));
   follow_joint_trajectory_action_server_->start();
@@ -170,40 +170,109 @@ void JointModule::onJointTrajectory(trajectory_msgs::JointTrajectory trajectory)
 
       // Be careful about global and local variable
       // double mov_time = point.time_from_start.count() - previous_time; // local
-      double mov_time = point.time_from_start.sec - previous_time; // local
-      double all_time_steps = int(mov_time / control_cycle_sec_) + 1; // local
+      double mov_time = 0;
+      int all_time_steps = 1;
+      // if (point.time_from_start.sec > 0 && point.time_from_start.nsec > 0)
+      //   {
+      //     mov_time = point.time_from_start.sec + point.time_from_start.nsec * 1e-9 - previous_time; // local
+      //     all_time_steps = int(mov_time / control_cycle_sec_) + 1; // doubel to int
+      //   }
+
+      mov_time = point.time_from_start.sec + point.time_from_start.nsec * 1e-9 - previous_time; // local
+      mov_time_ += mov_time; // global
+
+      all_time_steps = int(mov_time / control_cycle_sec_) + 1; // local
+      all_time_steps_ += all_time_steps; // global
+
+      ROS_INFO("LOCAL: mov_time : %f, all_time_steps : %d", mov_time, all_time_steps);
+      ROS_INFO("GLOBAL: mov_time_ : %f, all_time_steps_ : %d", mov_time_, all_time_steps_);
 
       // goal_joint_tra_.resize(all_time_steps, MAX_JOINT_ID + 1); // MAX_JOINT_ID? .conservativeResize
-      goal_joint_tra_.conservativeResize(all_time_steps_, MAX_JOINT_ID + 1);
+      // goal_joint_tra_.conservativeResize(all_time_steps_, MAX_JOINT_ID + 1);
+      goal_joint_tra_.conservativeResize(all_time_steps_, joint_names.size());
+      ROS_INFO("row : %d, col : %d", goal_joint_tra_.rows(), goal_joint_tra_.cols());
 
       // loop for joints
-      for (unsigned int j = 0; j <= MAX_JOINT_ID; j++)
+      // for (std::map<std::string, int>::iterator iter = joint_name_to_id_.begin(); iter != joint_name_to_id_.end(); iter++)
+      for (unsigned int j = 0; j < joint_names.size(); j++ )
         {
-          double ini_value = goal_joint_position_(j);
-          double tar_value = goal_joint_position_(j);
+          int id = joint_name_to_id_[joint_names[j]];
+
+          double ini_value = goal_joint_position_(id); // joint_name_to_id
+          double tar_value = goal_joint_position_(id);
+
+          ROS_INFO("joint_name : %s", joint_names[j].c_str());
+          ROS_INFO("ini_value : %lf", ini_value * 1e9);
+          ROS_INFO("tar_value : %lf", tar_value * 1e9);
 
           // check until matching joint_name[j] with iter->first
           for (std::map<std::string, int>::iterator iter = joint_name_to_id_.begin(); iter != joint_name_to_id_.end(); iter++)
             {
               if (iter->first == joint_names[j])
-                tar_value = point.positions[j];
+                {
+                  tar_value = point.positions[j]; // necessary
+                  ROS_INFO("point.position[%d] : %lf", j, point.positions[j] * 1e9);
+                  ROS_INFO("tar_value : %lf", tar_value * 1e9);
+                }
             }
 
+          // mov_time should be greater than 0?
           Eigen::MatrixXd tra = robotis_framework::calcMinimumJerkTra(ini_value, 0.0, 0.0,
                                                                       tar_value, 0.0, 0.0,
                                                                       control_cycle_sec_,
                                                                       mov_time);
 
+          ROS_INFO("TRA CHECK row : %d, col : %d", tra.rows(), tra.cols());
+          ROS_INFO("Add point to trajectory. cnt : %d", cnt);
+
+          // row and all_time_steps should be 1 more larger
           goal_joint_tra_.block(cnt, j, all_time_steps, 1) = tra;
+
+          // if (i > 0)
+          //   {
+          //     ROS_INFO("Add point to trajectory. cnt : %d", cnt);
+          //     goal_joint_tra_.block(cnt, j, all_time_steps, 1) = tra; // error
+          //     // goal_joint_tra_.block(cnt, j, tra.rows(), tra.cols()) = tra; // error
+          //   }
+          // else
+          //   {
+          //     goal_joint_tra_.block(cnt, j, all_time_steps, 1) = tra; // error
+          //     ROS_INFO("Skipping initial loop. cnt : %d", cnt);
+          //   }
         }
 
+      // for (unsigned int j = 0; j <= MAX_JOINT_ID; j++)
+      //   {
+      //     double ini_value = goal_joint_position_(j); // joint_name_to_id
+      //     double tar_value = goal_joint_position_(j);
+      //     // joint_name_to_id_[joint_name]
+
+      //     ROS_INFO("ini_value : %f", ini_value);
+
+      //     // check until matching joint_name[j] with iter->first
+      //     for (std::map<std::string, int>::iterator iter = joint_name_to_id_.begin(); iter != joint_name_to_id_.end(); iter++)
+      //       {
+      //         if (iter->first == joint_names[j])
+      //           tar_value = point.positions[j];
+      //       }
+
+      //     // mov_time should be greater than 0?
+      //     Eigen::MatrixXd tra = robotis_framework::calcMinimumJerkTra(ini_value, 0.0, 0.0,
+      //                                                                 tar_value, 0.0, 0.0,
+      //                                                                 control_cycle_sec_,
+      //                                                                 mov_time);
+      //     ROS_INFO("tar_value : %f", tar_value);
+      //     ROS_INFO("Add point to trajectory. cnt : %d", cnt);
+      //     goal_joint_tra_.block(cnt, j, all_time_steps, 1) = tra; // error
+      //   }
+
       // update local var
-      previous_time = point.time_from_start.sec;
+      previous_time = point.time_from_start.sec + point.time_from_start.nsec * 1e-9; // correct?
       cnt += all_time_steps;
 
       // update global var
-      all_time_steps_ += all_time_steps;
-      mov_time_ += mov_time;
+      // all_time_steps_ += all_time_steps;
+      // mov_time_ += mov_time;
     }
 
   cnt_ = 0;
@@ -256,7 +325,6 @@ void JointModule::process(std::map<std::string, robotis_framework::Dynamixel *> 
 
   /* action feedback */
   // ros::Time tm_on_execute = ros::Time::now();
-
   // // trajectory_msgs::JointTrajectoryPoint commanded_joint_trajectory_point, error_joint_trajectory_point;
   // if ( follow_joint_trajectory_action_server_->isActive() ) {
   //   control_msgs::FollowJointTrajectoryFeedback follow_joint_trajectory_action_feedback;
@@ -300,7 +368,6 @@ void JointModule::process(std::map<std::string, robotis_framework::Dynamixel *> 
         ROS_INFO("l_arm_wr_r  : %f", goal_joint_position_(joint_name_to_id_["l_arm_wr_r"])  * RADIAN2DEGREE );
         ROS_INFO("l_arm_wr_y  : %f", goal_joint_position_(joint_name_to_id_["l_arm_wr_y"])  * RADIAN2DEGREE );
         ROS_INFO("l_arm_wr_p  : %f", goal_joint_position_(joint_name_to_id_["l_arm_wr_p"])  * RADIAN2DEGREE );
-
         ROS_INFO("r_arm_sh_p1 : %f", goal_joint_position_(joint_name_to_id_["r_arm_sh_p1"]) * RADIAN2DEGREE );
         ROS_INFO("r_arm_sh_r  : %f", goal_joint_position_(joint_name_to_id_["r_arm_sh_r"])  * RADIAN2DEGREE );
         ROS_INFO("r_arm_sh_p2 : %f", goal_joint_position_(joint_name_to_id_["r_arm_sh_p2"]) * RADIAN2DEGREE );
