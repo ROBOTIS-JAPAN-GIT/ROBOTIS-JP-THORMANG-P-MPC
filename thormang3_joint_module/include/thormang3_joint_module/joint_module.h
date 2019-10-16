@@ -47,6 +47,7 @@
 /* action */
 #include <actionlib/server/simple_action_server.h>
 #include <control_msgs/FollowJointTrajectoryAction.h>
+// #include <std_msgs/Duration.h>
 
 namespace thormang3
 {
@@ -70,6 +71,7 @@ public:
   void followJointTrajectoryActionGoalCallback();
   void trajectoryCommandCallback(const trajectory_msgs::JointTrajectoryConstPtr& msg);
   void onJointTrajectory(trajectory_msgs::JointTrajectory trajectory);
+  void onFollowJointTrajectory(trajectory_msgs::JointTrajectory trajectory);
 
   /* Parameter */
   // KinematicsDynamics *robotis_;
@@ -85,7 +87,7 @@ private:
   boost::thread   queue_thread_;
   boost::thread   *traj_generate_thread_;
 
-  // boost::mutex process_mutex_; // added
+  boost::mutex process_mutex_; // added
 
   std_msgs::String movement_done_msg_;
 
@@ -107,6 +109,7 @@ private:
   double  mov_time_;
   int     cnt_;
   int     all_time_steps_;
+  bool    is_dxl_read_;
 
   Eigen::MatrixXd goal_joint_tra_;
 
