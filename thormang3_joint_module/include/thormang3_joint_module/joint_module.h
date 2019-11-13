@@ -49,6 +49,9 @@
 #include <control_msgs/FollowJointTrajectoryAction.h>
 // #include <std_msgs/Duration.h>
 
+/* moveit */
+#include <moveit_msgs/MotionPlanRequest.h>
+
 namespace thormang3
 {
 
@@ -73,6 +76,8 @@ public:
   void onJointTrajectory(trajectory_msgs::JointTrajectory trajectory);
   void onFollowJointTrajectory(trajectory_msgs::JointTrajectory trajectory);
 
+  void motionPlanRequestCallback(const moveit_msgs::MotionPlanRequestConstPtr &msg);
+
   /* Parameter */
   // KinematicsDynamics *robotis_;
 
@@ -86,6 +91,8 @@ private:
   double          control_cycle_sec_;
   boost::thread   queue_thread_;
   boost::thread   *traj_generate_thread_;
+  // boost::thread   *traj_generate_thread_r_;
+  // boost::thread   *traj_generate_thread_l_;
 
   boost::mutex process_mutex_; // added
 
@@ -95,7 +102,8 @@ private:
   ros::Publisher  movement_done_pub_;
 
   /* action */
-  boost::shared_ptr<actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction> >follow_joint_trajectory_action_server_;
+  boost::shared_ptr<actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction> >follow_joint_traj_action_server_r_;
+  boost::shared_ptr<actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction> >follow_joint_traj_action_server_l_;
   control_msgs::FollowJointTrajectoryActionFeedback feedback;
   control_msgs::FollowJointTrajectoryActionResult result;
 
@@ -110,6 +118,8 @@ private:
   int     cnt_;
   int     all_time_steps_;
   bool    is_dxl_read_;
+  std::string group_name_;
+  // std::vector<std::string> joint_list_;
 
   Eigen::MatrixXd goal_joint_tra_;
 

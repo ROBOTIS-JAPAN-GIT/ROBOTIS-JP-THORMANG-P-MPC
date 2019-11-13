@@ -30,7 +30,8 @@ JointModule::JointModule()
     is_moving_(false),
     arm_angle_display_(false),
     is_dxl_read_(false),
-    cnt_(0)
+    cnt_(0),
+    group_name_("right_arm")
 {
   enable_       = false;
   module_name_  = "joint_module";
@@ -108,15 +109,27 @@ void JointModule::queueThread()
 
   ros_node.setCallbackQueue(&callback_queue);
 
+  /* TODO: Refer to HrpsysJointTrajectoryBridge and create jointTrajectoryActionObj */
   /* action server */
-  follow_joint_trajectory_action_server_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(ros_node, "thormang3/right_arm_controller/follow_joint_trajectory", false));
-  follow_joint_trajectory_action_server_->registerGoalCallback(boost::bind(&JointModule::followJointTrajectoryActionGoalCallback, this));
-  follow_joint_trajectory_action_server_->registerPreemptCallback(boost::bind(&JointModule::followJointTrajectoryActionPreemptCallback, this));
-  follow_joint_trajectory_action_server_->start();
+  /* right */
+  follow_joint_traj_action_server_r_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(ros_node, "thormang3/right_arm_controller/follow_joint_trajectory", false));
+  follow_joint_traj_action_server_r_->registerGoalCallback(boost::bind(&JointModule::followJointTrajectoryActionGoalCallback, this));
+  follow_joint_traj_action_server_r_->registerPreemptCallback(boost::bind(&JointModule::followJointTrajectoryActionPreemptCallback, this));
+  follow_joint_traj_action_server_r_->start();
+
+  /* left */
+  follow_joint_traj_action_server_l_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(ros_node, "thormang3/left_arm_controller/follow_joint_trajectory", false));
+  follow_joint_traj_action_server_l_->registerGoalCallback(boost::bind(&JointModule::followJointTrajectoryActionGoalCallback, this));
+  follow_joint_traj_action_server_l_->registerPreemptCallback(boost::bind(&JointModule::followJointTrajectoryActionPreemptCallback, this));
+  follow_joint_traj_action_server_l_->start();
 
   /* subscribe trajectory command topic */
   ros::Subscriber traj_command_sub = ros_node.subscribe("thormang3/trajectory_command", 5,
                                                         &JointModule::trajectoryCommandCallback, this);
+
+  /* moveit */
+  ros::Subscriber motion_plan_request_sub = ros_node.subscribe("/move_group/motion_plan_request", 5,
+                                                               &JointModule::motionPlanRequestCallback, this);
 
   /* ROS Loop */
   ros::WallDuration duration(control_cycle_sec_);
@@ -126,20 +139,36 @@ void JointModule::queueThread()
 
 void JointModule::followJointTrajectoryActionPreemptCallback()
 {
-  follow_joint_trajectory_action_server_->setPreempted();
+  follow_joint_traj_action_server_r_->setPreempted();
+  follow_joint_traj_action_server_l_->setPreempted();
+}
+
+// new function
+void JointModule::motionPlanRequestCallback(const moveit_msgs::MotionPlanRequestConstPtr &msg)
+{
+  group_name_ = msg->group_name.c_str();
+  ROS_INFO("group_name: %s ", msg->group_name.c_str());
 }
 
 void JointModule::followJointTrajectoryActionGoalCallback()
 {
-  control_msgs::FollowJointTrajectoryGoalConstPtr goal = follow_joint_trajectory_action_server_->acceptNewGoal();
-  if (is_moving_ == false)
+  if (group_name_ == "right_arm" && is_moving_ == false)
     {
-      // traj_generate_thread_ = new boost::thread(boost::bind(&JointModule::onJointTrajectory, this, goal->trajectory));
+      ROS_INFO("right goal.");
+      control_msgs::FollowJointTrajectoryGoalConstPtr goal = follow_joint_traj_action_server_r_->acceptNewGoal();
+      traj_generate_thread_ = new boost::thread(boost::bind(&JointModule::onFollowJointTrajectory, this, goal->trajectory));
+      delete traj_generate_thread_;
+    }
+  else if (group_name_ == "left_arm" && is_moving_ == false)
+    {
+      ROS_INFO("left goal.");
+      control_msgs::FollowJointTrajectoryGoalConstPtr goal = follow_joint_traj_action_server_l_->acceptNewGoal();
       traj_generate_thread_ = new boost::thread(boost::bind(&JointModule::onFollowJointTrajectory, this, goal->trajectory));
       delete traj_generate_thread_;
     }
   else
     ROS_INFO("previous task is alive");
+
 }
 
 void JointModule::trajectoryCommandCallback(const trajectory_msgs::JointTrajectoryConstPtr& msg)
@@ -243,6 +272,9 @@ void JointModule::onJointTrajectory(trajectory_msgs::JointTrajectory trajectory)
   all_time_steps_ = 0;
   mov_time_ = 0;
 
+  // get joint list
+  // joint_list_ = trajectory.joint_names;
+
   ROS_INFO("MAX_JOINT_ID : %d", MAX_JOINT_ID);
   // while ( enable_ && i < trajectory.points.size() ) // check life of module && ros::ok()
 
@@ -326,6 +358,9 @@ void JointModule::process(std::map<std::string, robotis_framework::Dynamixel *> 
 
   /*----- write curr position -----*/
 
+  // store joint trajectory point for feedback
+  control_msgs::FollowJointTrajectoryFeedback follow_joint_traj_action_feedback;
+
   for (std::map<std::string, robotis_framework::DynamixelState *>::iterator state_iter = result_.begin();
        state_iter != result_.end(); state_iter++)
   {
@@ -340,10 +375,45 @@ void JointModule::process(std::map<std::string, robotis_framework::Dynamixel *> 
 
     double joint_curr_position = dxl->dxl_state_->present_position_;
     double joint_goal_position = dxl->dxl_state_->goal_position_;
+    double joint_curr_velocity = dxl->dxl_state_->present_velocity_;
+    double joint_goal_velocity = dxl->dxl_state_->goal_velocity_;
+    double joint_curr_torque = dxl->dxl_state_->present_torque_;
+    double joint_goal_torque = dxl->dxl_state_->goal_torque_;
 
     present_joint_position_(joint_name_to_id_[joint_name]) = joint_curr_position;
     goal_joint_position_(joint_name_to_id_[joint_name]) = joint_goal_position;
 
+    // set action feedback
+    follow_joint_traj_action_feedback.joint_names.push_back(joint_name);
+    follow_joint_traj_action_feedback.actual.positions.push_back(joint_curr_position);
+    follow_joint_traj_action_feedback.desired.positions.push_back(joint_goal_position);
+    follow_joint_traj_action_feedback.actual.velocities.push_back(joint_curr_velocity);
+    follow_joint_traj_action_feedback.desired.velocities.push_back(joint_goal_velocity);
+    follow_joint_traj_action_feedback.actual.effort.push_back(joint_curr_torque);
+    follow_joint_traj_action_feedback.desired.effort.push_back(joint_goal_torque);
+
+    // error
+    follow_joint_traj_action_feedback.error.positions.push_back(joint_goal_position - joint_curr_position);
+    follow_joint_traj_action_feedback.error.velocities.push_back(joint_goal_velocity - joint_curr_velocity);
+    follow_joint_traj_action_feedback.error.effort.push_back(joint_goal_torque - joint_curr_torque);
+
+    // accelerations, tmp values
+    follow_joint_traj_action_feedback.actual.accelerations.push_back(0.0);
+    follow_joint_traj_action_feedback.desired.accelerations.push_back(0.0);
+    follow_joint_traj_action_feedback.error.accelerations.push_back(0.0);
+
+  }
+
+  /* ----- publish action feedback ----- */
+  ros::Time tm_on_execute = ros::Time::now();
+
+  if ( follow_joint_traj_action_server_r_->isActive() ) {
+    follow_joint_traj_action_feedback.header.stamp = tm_on_execute;
+    follow_joint_traj_action_server_r_->publishFeedback(follow_joint_traj_action_feedback);
+  }
+  else if ( follow_joint_traj_action_server_l_->isActive() ) {
+    follow_joint_traj_action_feedback.header.stamp = tm_on_execute;
+    follow_joint_traj_action_server_l_->publishFeedback(follow_joint_traj_action_feedback);
   }
 
   /* ----- send trajectory ----- */
@@ -363,19 +433,6 @@ void JointModule::process(std::map<std::string, robotis_framework::Dynamixel *> 
     result_[joint_name]->goal_position_ = goal_joint_position_(joint_name_to_id_[joint_name]);
   }
 
-  /* TODO: action feedback */
-  ros::Time tm_on_execute = ros::Time::now();
-  // trajectory_msgs::JointTrajectoryPoint commanded_joint_trajectory_point, error_joint_trajectory_point;
-  // if ( follow_joint_trajectory_action_server_->isActive() ) {
-  //   control_msgs::FollowJointTrajectoryFeedback follow_joint_trajectory_action_feedback;
-  //   follow_joint_trajectory_action_feedback.header.stamp = tm_on_execute;
-  //   follow_joint_trajectory_action_feedback.joint_names = joint_list;
-  //   follow_joint_trajectory_action_feedback.desired = commanded_joint_trajectory_point;
-  //   follow_joint_trajectory_action_feedback.actual  = commanded_joint_trajectory_point;
-  //   follow_joint_trajectory_action_feedback.error   = error_joint_trajectory_point;
-  //   follow_joint_trajectory_action_server_->publishFeedback(follow_joint_trajectory_action_feedback);
-  // }
-
   /*---------- initialize count number ----------*/
   if (is_moving_ == true)
   {
@@ -392,11 +449,17 @@ void JointModule::process(std::map<std::string, robotis_framework::Dynamixel *> 
       movement_done_msg_.data = "";
 
       /* action result */
-      if ( follow_joint_trajectory_action_server_->isActive() )
+      if ( follow_joint_traj_action_server_r_->isActive() )
         {
           control_msgs::FollowJointTrajectoryResult result;
           result.error_code = control_msgs::FollowJointTrajectoryResult::SUCCESSFUL;
-          follow_joint_trajectory_action_server_->setSucceeded(result);
+          follow_joint_traj_action_server_r_->setSucceeded(result);
+        }
+      else if ( follow_joint_traj_action_server_l_->isActive() )
+        {
+          control_msgs::FollowJointTrajectoryResult result;
+          result.error_code = control_msgs::FollowJointTrajectoryResult::SUCCESSFUL;
+          follow_joint_traj_action_server_l_->setSucceeded(result);
         }
 
       if (arm_angle_display_ == true)
