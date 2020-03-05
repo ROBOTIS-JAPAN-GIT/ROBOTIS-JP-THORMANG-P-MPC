@@ -118,7 +118,7 @@ void JointModule::queueThread()
   follow_joint_traj_action_server_r_->start();
 
   /* left */
-  follow_joint_traj_action_server_l_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(ros_node, "thormang3/left_arm_controller/follow_joint_trajectory", false));
+  follow_joint_traj_action_server_l_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(ros_node, "thormang3/left_arm_with_torso_controller/follow_joint_trajectory", false));
   follow_joint_traj_action_server_l_->registerGoalCallback(boost::bind(&JointModule::followJointTrajectoryActionGoalCallback, this));
   follow_joint_traj_action_server_l_->registerPreemptCallback(boost::bind(&JointModule::followJointTrajectoryActionPreemptCallback, this));
   follow_joint_traj_action_server_l_->start();
@@ -154,14 +154,14 @@ void JointModule::followJointTrajectoryActionGoalCallback()
 {
   if (group_name_ == "right_arm" && is_moving_ == false)
     {
-      ROS_INFO("right goal.");
+      ROS_INFO("%s", group_name_);
       control_msgs::FollowJointTrajectoryGoalConstPtr goal = follow_joint_traj_action_server_r_->acceptNewGoal();
       traj_generate_thread_ = new boost::thread(boost::bind(&JointModule::onFollowJointTrajectory, this, goal->trajectory));
       delete traj_generate_thread_;
     }
-  else if (group_name_ == "left_arm" && is_moving_ == false)
+  else if (group_name_ == "left_arm_with_torso" && is_moving_ == false)
     {
-      ROS_INFO("left goal.");
+      ROS_INFO("%s", group_name_);
       control_msgs::FollowJointTrajectoryGoalConstPtr goal = follow_joint_traj_action_server_l_->acceptNewGoal();
       traj_generate_thread_ = new boost::thread(boost::bind(&JointModule::onFollowJointTrajectory, this, goal->trajectory));
       delete traj_generate_thread_;
